@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enredo | Harmonics High-Res v5.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js Core & Post-Processing Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BokehShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+    <style>
+        :root {
+            --carbon: #030303;
+            --oxygen: #EAEAEA;
+            --enredo: #00FFDA;
+            --glass: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            background-color: var(--carbon);
+            color: var(--oxygen);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            cursor: grab;
+        }
+        body:active { cursor: grabbing; }
+
+        /* --- UI OVERLAY --- */
+        #ui-layer {
+            position: absolute; top: 1rem; left: 1rem;
+            width: 340px; max-height: calc(100vh - 2rem); overflow-y: auto;
+            background: rgba(5, 5, 5, 0.85);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border); padding: 1.5rem;
+            border-radius: 4px; pointer-events: auto; user-select: none;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            transition: opacity 0.3s;
+            z-index: 20;
+        }
+        #ui-layer::-webkit-scrollbar { width: 4px; }
+        #ui-layer::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+        h1 {
+            font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.1em;
+            margin: 0 0 1.5rem 0; font-weight: 700;
+            border-bottom: 1px solid var(--enredo); padding-bottom: 0.5rem;
+            display: inline-block;
+        }
+
+        h2 {
+            font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--enredo); margin: 1.2rem 0 0.5rem 0; opacity: 0.8;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .control-group { margin-bottom: 0.8rem; }
+
+        label {
+            display: flex; justify-content: space-between;
+            font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em;
+            margin-bottom: 0.3rem; color: rgba(255,255,255,0.6);
+        }
+
+        input[type="range"] { width: 100%; -webkit-appearance: none; background: transparent; }
+        input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: rgba(255,255,255,0.2); }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 10px; width: 10px;
+            border-radius: 50%; background: var(--enredo); marginTop: -4px;
+            cursor: pointer; box-shadow: 0 0 8px var(--enredo); transition: transform 0.2s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+        select {
+            width: 100%; background: rgba(0,0,0,0.5); color: var(--oxygen);
+            border: 1px solid var(--border); padding: 0.4rem; font-size: 0.7rem; outline: none; text-transform: uppercase;
+        }
+
+        .toggle-btn {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+            color: var(--oxygen); padding: 0.6rem 1rem; font-size: 0.7rem;
+            text-transform: uppercase; cursor: pointer; transition: all 0.3s;
+            width: 100%; margin-top: 0.8rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center;
+        }
+        .toggle-btn:hover { border-color: var(--enredo); color: var(--carbon); background: var(--enredo); }
+        .toggle-btn span.status { opacity: 0.5; font-size: 0.6rem; }
+        .toggle-btn.active { background: var(--enredo); color: var(--carbon); border-color: var(--enredo); }
+
+        #grain {
+            position: fixed; inset: 0; pointer-events: none; z-index: 10;
+            opacity: 0.05; mix-blend-mode: overlay;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+        }
+        #controls-hint {
+            position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+            color: rgba(255,255,255,0.3); font-size: 0.7rem; text-transform: uppercase;
+            letter-spacing: 0.1em; pointer-events: none; opacity: 0; transition: opacity 0.5s; z-index: 15;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="grain"></div>
+    <div id="controls-hint">Arraste para Orbitar • Scroll para Zoom</div>
+
+    <div id="ui-layer">
+        <h1>Harmônicos <span style="color:var(--enredo)">.HighRes</span></h1>
+
+        <!-- MODO GENERADOR -->
+        <h2>Modo Gerador</h2>
+        <div class="control-group">
+            <select id="geoMode">
+                <option value="liquid">Líquido (Ultra Smooth)</option>
+                <option value="ribbon">Fita (Flat/Nó)</option>
+                <option value="tube">Tubo (Vidro Padrão)</option>
+                <option value="swarm">Enxame (Malha Densa)</option>
+                <option value="quantum">Quantum (Partículas)</option>
+                <option value="portal">Portal (Vortex Infinito)</option>
+            </select>
+        </div>
+
+        <!-- GEOMETRIA -->
+        <h2>Estrutura</h2>
+        <div class="control-group">
+            <label>Densidade (Qtd) <span id="val-count">5</span></label>
+            <input type="range" id="count" min="1" max="200" value="5"> 
+        </div>
+        <div class="control-group">
+            <label>Defasagem (Harmony) <span id="val-spread">20%</span></label>
+            <input type="range" id="spread" min="0" max="100" value="20">
+        </div>
+        <div class="control-group">
+            <label>Raio (Escala) <span id="val-radius">15</span></label>
+            <input type="range" id="radius" min="5" max="60" value="15">
+        </div>
+        
+        <!-- FORMA -->
+        <h2>Forma & Detalhe</h2>
+        <div class="control-group">
+            <label>Espessura (Volume) <span id="val-thickness">2.5</span></label>
+            <input type="range" id="thickness" min="0.02" max="5.0" step="0.02" value="2.5">
+        </div>
+        <div class="control-group">
+            <label>Torção/Complexidade <span id="val-twist">5</span></label>
+            <input type="range" id="twist" min="0" max="20" step="1" value="5">
+        </div>
+         <div class="control-group">
+            <label>Resolução (Smooth) <span id="val-tubularSegments">400</span></label>
+            <!-- Aumentado limite máximo para 1000 para suavidade extrema -->
+            <input type="range" id="tubularSegments" min="50" max="1000" step="10" value="400">
+        </div>
+
+        <!-- DINÂMICA -->
+        <h2>Dinâmica</h2>
+        <div class="control-group">
+            <label>Velocidade <span id="val-speed">0.3</span></label>
+            <input type="range" id="speed" min="0" max="5" step="0.1" value="0.3">
+        </div>
+        <div class="control-group">
+            <label>Inclinação (Eixo X) <span id="val-tilt">30°</span></label>
+            <input type="range" id="tilt" min="0" max="180" value="30">
+        </div>
+        <div class="control-group">
+            <label>Caos/Ruído <span id="val-chaos">0%</span></label>
+            <input type="range" id="chaos" min="0" max="100" value="0">
+        </div>
+
+        <!-- MATERIAL -->
+        <h2>Acabamento</h2>
+        <div class="control-group">
+            <label>Transmissão <span id="val-transmission">0.98</span></label>
+            <input type="range" id="transmission" min="0" max="1" step="0.01" value="0.98">
+        </div>
+        <div class="control-group">
+            <label>Rugosidade <span id="val-roughness">0.05</span></label>
+            <input type="range" id="roughness" min="0" max="1" step="0.01" value="0.05">
+        </div>
+
+        <!-- CONTROLES DE CÂMERA E RENDER -->
+        <h2 style="margin-top: 1.5rem;">Renderização</h2>
+        <button id="macro-btn" class="toggle-btn" onclick="toggleMacroMode()">
+            Macro Foco (Luz)
+            <span id="macro-status" class="status">OFF</span>
+        </button>
+        <button class="toggle-btn" onclick="toggleView()">
+            Modo de Navegação
+            <span id="cam-status" class="status">LIVRE</span>
+        </button>
+        <button class="toggle-btn" style="border-color:var(--enredo); color:var(--enredo)" onclick="randomize()">Gerar Variação Wild</button>
+        <button class="toggle-btn" style="border-top:1px solid rgba(255,255,255,0.1); margin-top:1rem; font-weight: 700; letter-spacing: 0.1em;" onclick="exportHighResFrame()">EXPORTAR CLOSE-UP (4K)</button>
+    </div>
+
+    <script>
+        // --- SETUP THREE.JS & POST-PROCESSING ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x020202); // Void black
+
+        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000); 
+        camera.position.set(40, 20, 60);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio); 
+        renderer.physicallyCorrectLights = true;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.05;
+        controls.enabled = true;
+
+        // --- COMPOSITOR DE PÓS-PROCESSAMENTO ---
+        const composer = new THREE.EffectComposer(renderer);
+        const renderPass = new THREE.RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        // 1. Bloom
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.7;
+        bloomPass.strength = 0.4;
+        bloomPass.radius = 0.2;
+        composer.addPass(bloomPass);
+
+        // 2. Bokeh
+        const bokehPass = new THREE.BokehPass(scene, camera, {
+            focus: 25.0,
+            aperture: 0.0001,
+            maxblur: 0.01,
+            width: window.innerWidth,
+            height: window.innerHeight
+        });
+        composer.addPass(bokehPass);
+
+        // --- LUZES DE ALTA FIDELIDADE ---
+        const keyLight = new THREE.SpotLight(0x00FFDA, 4000);
+        keyLight.position.set(30, 40, 20);
+        keyLight.angle = Math.PI / 8;
+        keyLight.penumbra = 0.2;
+        keyLight.decay = 2;
+        keyLight.distance = 200;
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 2048;
+        keyLight.shadow.mapSize.height = 2048;
+        keyLight.shadow.bias = -0.0001;
+        scene.add(keyLight);
+
+        const rimLight = new THREE.SpotLight(0xffffff, 3000);
+        rimLight.position.set(-30, 10, -40);
+        rimLight.angle = Math.PI / 4;
+        rimLight.penumbra = 0.5;
+        scene.add(rimLight);
+
+        const fillLight = new THREE.RectAreaLight(0x0044aa, 300, 50, 50);
+        fillLight.position.set(0, -50, 50); fillLight.lookAt(0,0,0);
+        scene.add(fillLight);
+
+
+        // --- ESTADO ---
+        const state = {
+            geoMode: 'liquid', 
+            count: 5, spread: 0.2, radius: 15, thickness: 2.5, twist: 5,
+            tubularSegments: 400, // Valor padrão aumentado para resolução
+            speed: 0.3, tilt: 30 * Math.PI/180, chaos: 0,
+            transmission: 0.98, roughness: 0.05, viewMode: 'free', macroMode: false
+        };
+
+        const ringGroup = new THREE.Group();
+        scene.add(ringGroup);
+        let rings = [];
+
+        // --- MATERIAL DE VIDRO DE ALTA FIDELIDADE ---
+        const glassMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x00FFDA, 
+            metalness: 0.0, 
+            roughness: state.roughness, 
+            transmission: state.transmission, 
+            ior: 1.5, 
+            thickness: 3.0, 
+            clearcoat: 1.0, 
+            clearcoatRoughness: 0.02,
+            side: THREE.DoubleSide, 
+            transparent: true,
+            envMapIntensity: 1.5 
+        });
+
+        // --- CRIADOR DE GEOMETRIA ---
+        function createSystem() {
+            ringGroup.children.forEach(c => { if(c.geometry) c.geometry.dispose(); });
+            ringGroup.clear();
+            rings = [];
+
+            let geometry;
+            let activeMaterial = glassMaterial;
+            glassMaterial.wireframe = false;
+
+            // Aumento drástico na resolução radial (128 segments) e tubular
+            switch(state.geoMode) {
+                case 'liquid': 
+                    // Radial segments aumentado para 128 para tubos perfeitamente redondos
+                    geometry = new THREE.TorusKnotGeometry(state.radius, state.thickness, state.tubularSegments, 128, Math.max(2, state.twist), 5);
+                    break;
+                case 'tube':
+                    // Radial segments aumentado para 128
+                    geometry = new THREE.TorusGeometry(state.radius, state.thickness, 128, state.tubularSegments);
+                    break;
+                case 'ribbon':
+                    geometry = new THREE.TorusKnotGeometry(state.radius, state.thickness, state.tubularSegments, 8, Math.max(1, state.twist), 3);
+                    geometry.scale(1, 1, 0.05); 
+                    break;
+                 // Outros modos
+            }
+            
+            if (state.geoMode === 'portal') {
+                 geometry = new THREE.TorusGeometry(state.radius, state.thickness, 128, state.tubularSegments);
+            }
+            
+            if (['swarm', 'quantum'].includes(state.geoMode)) {
+                 // Fallback
+                 geometry = new THREE.TorusGeometry(state.radius, state.thickness, 16, 64);
+                 activeMaterial = new THREE.MeshBasicMaterial({color: 0x00FFDA, wireframe: true, opacity:0.3, transparent:true});
+            }
+
+
+            for (let i = 0; i < state.count; i++) {
+                const mesh = new THREE.Mesh(geometry, activeMaterial.clone());
+                mesh.userData = { id: i, phaseOffset: Math.random() * 100, randomSpeed: Math.random() * 0.5 + 0.5 };
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                if (state.geoMode === 'ribbon') mesh.rotation.x = Math.PI / 2;
+                if (!['swarm', 'quantum'].includes(state.geoMode)) {
+                    mesh.material.roughness = state.roughness;
+                    mesh.material.transmission = state.transmission;
+                }
+                ringGroup.add(mesh);
+                rings.push(mesh);
+            }
+        }
+
+        createSystem();
+
+        // --- ANIMAÇÃO ---
+        let time = 0;
+        function animate() {
+            time += state.speed * 0.005;
+
+            rings.forEach((ring, i) => {
+                const nIndex = i / Math.max(1, state.count -1);
+                let phase = nIndex * state.spread * Math.PI * 2;
+                
+                let rotX = (Math.sin(time + phase) * state.tilt) + (state.tilt * 0.5);
+                let rotY = (time * 0.3) + phase;
+                
+                if (state.geoMode === 'liquid') {
+                    rotX += Math.sin(time * 0.7 + i) * 0.3;
+                    rotY += Math.cos(time * 0.5 + i) * 0.3;
+                    const s = 1 + Math.sin(time*2 + i)*0.05;
+                    ring.scale.set(s,s,s);
+                }
+
+                ring.rotation.x = rotX;
+                ring.rotation.y = rotY;
+            });
+
+            ringGroup.rotation.z = time * 0.02;
+
+            controls.update();
+            
+            if (state.macroMode) {
+                const dist = camera.position.distanceTo(new THREE.Vector3(0,0,0));
+                bokehPass.uniforms['focus'].value = dist;
+            }
+
+            composer.render();
+            requestAnimationFrame(animate);
+        }
+
+        // --- INTERFACE & CONTROLES ---
+        function bind(id, key, scale = 1, suffix = '', rebuild = false, mat = false) {
+            const el = document.getElementById(id);
+            const valEl = document.getElementById('val-' + id);
+            el.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                state[key] = val * scale;
+                if(suffix === '%') valEl.innerText = Math.round(val) + suffix;
+                else if(suffix === '°') valEl.innerText = Math.round(val) + suffix;
+                else valEl.innerText = (val * scale).toFixed(2) + suffix;
+                if (rebuild) createSystem();
+                if (mat && !['swarm', 'quantum', 'portal'].includes(state.geoMode)) {
+                    rings.forEach(r => { if(r.material[key] !== undefined) r.material[key] = state[key]; });
+                }
+            });
+        }
+
+        document.getElementById('geoMode').addEventListener('change', (e) => {
+            state.geoMode = e.target.value;
+            createSystem();
+        });
+
+        bind('count', 'count', 1, '', true);
+        bind('spread', 'spread', 0.01, '%');
+        bind('radius', 'radius', 1, '', true);
+        bind('thickness', 'thickness', 1, '', true);
+        bind('twist', 'twist', 1, '', true);
+        bind('tubularSegments', 'tubularSegments', 1, '', true);
+        bind('speed', 'speed', 1);
+        bind('tilt', 'tilt', Math.PI / 180, '°');
+        bind('chaos', 'chaos', 1, '%');
+        bind('transmission', 'transmission', 1, '', false, true);
+        bind('roughness', 'roughness', 1, '', false, true);
+
+        function toggleView() { 
+            const statusEl = document.getElementById('cam-status');
+            if (state.viewMode === 'free') {
+                state.viewMode = 'auto'; statusEl.innerText = 'AUTO (LENTO)';
+                controls.autoRotate = true; controls.autoRotateSpeed = 0.5;
+            } else {
+                state.viewMode = 'free'; statusEl.innerText = 'LIVRE';
+                controls.autoRotate = false;
+            }
+        }
+
+        // --- MODO MACRO FOCO ---
+        function toggleMacroMode() {
+            state.macroMode = !state.macroMode;
+            const btn = document.getElementById('macro-btn');
+            const status = document.getElementById('macro-status');
+
+            if (state.macroMode) {
+                btn.classList.add('active'); status.innerText = 'ON';
+                gsap.to(camera.position, { duration: 1.5, x: 15, y: 10, z: 20, ease: "power2.inOut" });
+                gsap.to(controls.target, { duration: 1.5, x: 0, y: 0, z: 0 });
+                gsap.to(bokehPass.uniforms['aperture'], { value: 0.005, duration: 1 }); 
+                gsap.to(bokehPass.uniforms['maxblur'], { value: 0.02, duration: 1 });
+            } else {
+                btn.classList.remove('active'); status.innerText = 'OFF';
+                gsap.to(camera.position, { duration: 1.5, x: 40, y: 20, z: 60, ease: "power2.inOut" });
+                gsap.to(bokehPass.uniforms['aperture'], { value: 0.0001, duration: 0.5 });
+                 gsap.to(bokehPass.uniforms['maxblur'], { value: 0.0, duration: 0.5 });
+            }
+        }
+        
+        // Randomize
+        function randomize() {
+            document.getElementById('geoMode').value = 'liquid';
+            document.getElementById('geoMode').dispatchEvent(new Event('change'));
+            
+            const setVal = (id, v) => { document.getElementById(id).value = v; document.getElementById(id).dispatchEvent(new Event('input')); };
+            setVal('twist', Math.floor(Math.random() * 8) + 2);
+            setVal('thickness', Math.random() * 1.5 + 1.5);
+            setVal('spread', Math.random() * 40);
+        }
+
+        // --- EXPORTAÇÃO EM ALTA RESOLUÇÃO ---
+        function exportHighResFrame() {
+            const originalPixelRatio = renderer.getPixelRatio();
+            renderer.setPixelRatio(window.devicePixelRatio * 2); 
+            composer.setSize(window.innerWidth * 2, window.innerHeight * 2); 
+
+            composer.render();
+
+            const link = document.createElement('a');
+            link.download = `Enredo_MacroShot_${Date.now()}.png`;
+            link.href = renderer.domElement.toDataURL('image/png', 1.0); 
+            link.click();
+
+            renderer.setPixelRatio(originalPixelRatio);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+            bokehPass.uniforms['aspect'].value = window.innerWidth / window.innerHeight;
+        });
+        
+        const script = document.createElement('script');
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js";
+        script.onload = animate;
+        document.head.appendChild(script);
+
+    </script>
+</body>
+</html>
